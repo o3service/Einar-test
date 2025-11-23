@@ -1,192 +1,466 @@
-<script>
-  const STORAGE_KEY = "kjorerapport_v1";
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kjørerapport</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  const loadReports = () =>
-    JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  <style>
+    /* --- STILSETTING (samme visuelle stil, bedre strukturert) --- */
 
-  const saveReports = (list) =>
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-
-  function renderReports() {
-    const container = document.getElementById("reportList");
-    const reports = loadReports();
-    container.innerHTML = "";
-
-    if (reports.length === 0) {
-      container.innerHTML = '<p class="muted small">Ingen rapporter lagret.</p>';
-      return;
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    reports.slice().reverse().forEach((r) => {
-      const el = document.createElement("div");
-      el.className = "report-item";
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f3f4f6;
+      color: #111827;
+    }
 
-      el.innerHTML = `
-        <div class="report-header">
-          <div>${r.date || "Ukjent dato"} – ${r.startLocation || "?"} → ${r.endLocation || "?"}</div>
-          <span class="badge">${r.transportType || "?"}</span>
+    .app {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      text-align: center;
+      margin-bottom: 0.25rem;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      margin-top: 1.4rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      border-radius: 0.5rem;
+      border: 1px solid #d1d5db;
+      font-size: 0.9rem;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 70px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .col-6 {
+      flex: 1 1 180px;
+    }
+
+    .col-4 {
+      flex: 1 1 120px;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 0.55rem 1rem;
+      border-radius: 999px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      font-size: 0.92rem;
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .chip {
+      border: 1px solid #d1d5db;
+      padding: 0.2rem 0.7rem;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .chip.selected {
+      background: #2563eb;
+      color: white;
+      border-color: #2563eb;
+    }
+
+    .report-list {
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .report-item {
+      padding: 0.5rem 0 0.75rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+    }
+
+    .badge {
+      background: #eff6ff;
+      color: #1d4ed8;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+    }
+
+    .small { font-size: 0.8rem; }
+    .muted { color: #6b7280; }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <h1>Kjørerapport</h1>
+    <p class="muted small" style="text-align:center;">Data lagres lokalt på enheten.</p>
+
+    <!-- SKJEMA -->
+    <form id="reportForm" class="card">
+      <h2>Oppdrag</h2>
+
+      <div class="row">
+        <div class="col-6">
+          <label for="date">Dato</label>
+          <input type="date" id="date" required>
         </div>
-        <div class="muted small">
-          ${r.client || "Ukjent"} • ${r.totalKm || "-"} km • ${r.startTime || "?"}–${r.endTime || "?"}
+
+        <div class="col-6">
+          <label for="client">Oppdragsgiver</label>
+          <input type="text" id="client" placeholder="Firma / kunde">
         </div>
-        ${r.incidents ? `<div class="small">Notat: ${r.incidents}</div>` : ""}
-      `;
+      </div>
 
-      container.appendChild(el);
-    });
-  }
+      <div class="row">
+        <div class="col-6">
+          <label for="startTime">Starttid</label>
+          <input type="time" id="startTime" required>
+        </div>
+        <div class="col-6">
+          <label for="endTime">Sluttid</label>
+          <input type="time" id="endTime" required>
+        </div>
+      </div>
 
-  function calcKm() {
-    const s = parseFloat(document.getElementById("odoStart").value);
-    const e = parseFloat(document.getElementById("odoEnd").value);
-    if (!isNaN(s) && !isNaN(e) && e >= s) {
-      document.getElementById("totalKm").value = e - s;
-    } else {
-      document.getElementById("totalKm").value = "";
-    }
-  }
+      <div class="row">
+        <div class="col-6">
+          <label for="startLocation">Startsted</label>
+          <input type="text" id="startLocation">
+        </div>
+        <div class="col-6">
+          <label for="endLocation">Sluttsted</label>
+          <input type="text" id="endLocation">
+        </div>
+      </div>
 
-  function setupChips() {
-    const chips = document.querySelectorAll("#transportTypeChips .chip");
-    const hidden = document.getElementById("transportType");
+      <h2>Kjøretøy</h2>
 
-    chips.forEach((chip) => {
-      chip.addEventListener("click", () => {
-        chips.forEach((c) => c.classList.remove("selected"));
-        chip.classList.add("selected");
-        hidden.value = chip.dataset.value;
-      });
-    });
-  }
+      <div class="row">
+        <div class="col-6">
+          <label for="escortReg">Følgebil reg.nr</label>
+          <input type="text" id="escortReg">
+        </div>
+        <div class="col-6">
+          <label for="transportReg">Transport reg.nr</label>
+          <input type="text" id="transportReg">
+        </div>
+      </div>
 
-  function exportCsv() {
-    const data = loadReports();
-    if (data.length === 0) {
-      alert("Ingen rapporter å eksportere.");
-      return;
-    }
+      <label>Transporttype</label>
+      <div id="transportTypeChips" class="chips">
+        <div class="chip" data-value="Bred last">Bred last</div>
+        <div class="chip" data-value="Lang last">Lang last</div>
+        <div class="chip" data-value="Høy last">Høy last</div>
+        <div class="chip" data-value="Tung last">Tung last</div>
+        <div class="chip" data-value="Annet">Annet</div>
+      </div>
+      <input type="hidden" id="transportType">
 
-    const headers = [
-      "Dato","Kunde","Starttid","Sluttid","Startsted","Sluttsted",
-      "Følgebil","Transport reg.nr","Type","Km start","Km slutt",
-      "Total km","Kjøretid","Ventetid","Vær","Veg","Hendelser",
-      "Radio","Dekning","Avvik","Sjåfør"
-    ];
+      <h2>Kjøring</h2>
+      <div class="row">
+        <div class="col-4">
+          <label for="odoStart">Km start</label>
+          <input type="number" id="odoStart">
+        </div>
+        <div class="col-4">
+          <label for="odoEnd">Km slutt</label>
+          <input type="number" id="odoEnd">
+        </div>
+        <div class="col-4">
+          <label for="totalKm">Totalt km</label>
+          <input type="number" id="totalKm" readonly>
+        </div>
+      </div>
 
-    const rows = data.map((r) => [
-      r.date || "",
-      r.client || "",
-      r.startTime || "",
-      r.endTime || "",
-      r.startLocation || "",
-      r.endLocation || "",
-      r.escortReg || "",
-      r.transportReg || "",
-      r.transportType || "",
-      r.odoStart || "",
-      r.odoEnd || "",
-      r.totalKm || "",
-      r.driveTime || "",
-      r.waitTime || "",
-      r.weather || "",
-      r.road || "",
-      (r.incidents || "").replace(/\n/g, " "),
-      r.radioOk || "",
-      r.coverage || "",
-      (r.deviations || "").replace(/\n/g, " "),
-      r.driverName || ""
-    ]);
+      <div class="row">
+        <div class="col-6">
+          <label for="driveTime">Kjøretid (timer:min)</label>
+          <input type="text" id="driveTime">
+        </div>
+        <div class="col-6">
+          <label for="waitTime">Ventetid (timer:min)</label>
+          <input type="text" id="waitTime">
+        </div>
+      </div>
 
-    const csvLines = [];
-    csvLines.push(headers.join(";"));
-    rows.forEach((row) => {
-      const escaped = row.map((field) => {
-        const f = String(field).replace(/"/g, '""');
-        if (f.includes(";") || f.includes('"') || f.includes("\n")) {
-          return `"${f}"`;
-        }
-        return f;
-      });
-      csvLines.push(escaped.join(";"));
-    });
+      <h2>Forhold</h2>
+      <div class="row">
+        <div class="col-6">
+          <label for="weather">Vær</label>
+          <select id="weather">
+            <option value="">Velg…</option>
+            <option>Sol</option><option>Skyet</option><option>Regn</option><option>Snø</option><option>Vind</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label for="road">Vegforhold</label>
+          <select id="road">
+            <option value="">Velg…</option>
+            <option>Tørr</option><option>Våt</option><option>Snø</option><option>Is/holke</option><option>Glatt</option>
+          </select>
+        </div>
+      </div>
 
-    const blob = new Blob([csvLines.join("\n")], {
-      type: "text/csv;charset=utf-8;"
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `kjorerapporter_${dateStr}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
+      <label for="incidents">Hendelser / merknader</label>
+      <textarea id="incidents"></textarea>
 
-  document.addEventListener("DOMContentLoaded", () => {
-    // Sett dagens dato
-    const today = new Date().toISOString().split("T")[0];
-    document.getElementById("date").value = today;
+      <h2>Kommunikasjon</h2>
 
-    setupChips();
-    renderReports();
+      <div class="row">
+        <div class="col-6">
+          <label for="radioOk">Radio fungerte?</label>
+          <select id="radioOk">
+            <option value="">Velg…</option>
+            <option>Ja</option><option>Nei</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label for="coverage">Mobildekning</label>
+          <select id="coverage">
+            <option value="">Velg…</option>
+            <option>God</option><option>Middels</option><option>Dårlig</option><option>Ingen</option>
+          </select>
+        </div>
+      </div>
 
-    document.getElementById("odoStart").addEventListener("input", calcKm);
-    document.getElementById("odoEnd").addEventListener("input", calcKm);
+      <label for="deviations">Avvik</label>
+      <textarea id="deviations"></textarea>
 
-    document.getElementById("reportForm").addEventListener("submit", (e) => {
-      e.preventDefault();
+      <h2>Signatur</h2>
+      <label for="driverName">Sjåfør</label>
+      <input type="text" id="driverName">
 
-      const r = {
-        date: document.getElementById("date").value,
-        client: document.getElementById("client").value,
-        startTime: document.getElementById("startTime").value,
-        endTime: document.getElementById("endTime").value,
-        startLocation: document.getElementById("startLocation").value,
-        endLocation: document.getElementById("endLocation").value,
-        escortReg: document.getElementById("escortReg").value,
-        transportReg: document.getElementById("transportReg").value,
-        transportType: document.getElementById("transportType").value,
-        odoStart: document.getElementById("odoStart").value,
-        odoEnd: document.getElementById("odoEnd").value,
-        totalKm: document.getElementById("totalKm").value,
-        driveTime: document.getElementById("driveTime").value,
-        waitTime: document.getElementById("waitTime").value,
-        weather: document.getElementById("weather").value,
-        road: document.getElementById("road").value,
-        incidents: document.getElementById("incidents").value,
-        radioOk: document.getElementById("radioOk").value,
-        coverage: document.getElementById("coverage").value,
-        deviations: document.getElementById("deviations").value,
-        driverName: document.getElementById("driverName").value
-      };
+      <div style="margin-top:1rem;">
+        <button type="submit" class="btn btn-primary">Lagre kjørerapport</button>
+        <button type="button" id="clearForm" class="btn btn-secondary">Nullstill</button>
+      </div>
+    </form>
 
-      const list = loadReports();
-      list.push(r);
-      saveReports(list);
-      renderReports();
-      alert("Kjørerapport lagret.");
-    });
+    <!-- LISTE -->
+    <div class="card">
+      <h2>Lagrede rapporter</h2>
+      <p class="muted small">Eksporter til CSV ved behov.</p>
 
-    document.getElementById("clearForm").addEventListener("click", () => {
-      const form = document.getElementById("reportForm");
-      form.reset();
-      document.getElementById("totalKm").value = "";
-      document
-        .querySelectorAll("#transportTypeChips .chip")
-        .forEach((c) => c.classList.remove("selected"));
-      document.getElementById("transportType").value = "";
-    });
+      <div style="margin-bottom:0.5rem;">
+        <button id="exportCsv" class="btn btn-secondary">Eksporter CSV</button>
+        <button id="clearAll" class="btn btn-secondary">Slett alle</button>
+      </div>
 
-    document.getElementById("clearAll").addEventListener("click", () => {
-      if (confirm("Slette alle rapporter?")) {
-        saveReports([]);
-        renderReports();
+      <div id="reportList" class="report-list"></div>
+    </div>
+  </div>
+
+  <script>
+    /* --- OPPDATERT JAVASCRIPT --- */
+
+    const STORAGE_KEY = "kjorerapport_v1";
+
+    const loadReports = () =>
+      JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+
+    const saveReports = (list) =>
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+
+    function renderReports() {
+      const container = document.getElementById("reportList");
+      const reports = loadReports();
+      container.innerHTML = "";
+
+      if (reports.length === 0) {
+        container.innerHTML = '<p class="muted small">Ingen rapporter lagret.</p>';
+        return;
       }
-    });
 
-    document.getElementById("exportCsv").addEventListener("click", exportCsv);
-  });
-</script>
+      reports.slice().reverse().forEach((r) => {
+        const el = document.createElement("div");
+        el.className = "report-item";
+
+        el.innerHTML = `
+          <div class="report-header">
+            <div>${r.date || "Ukjent dato"} – ${r.startLocation || "?"} → ${r.endLocation || "?"}</div>
+            <span class="badge">${r.transportType || "?"}</span>
+          </div>
+          <div class="muted small">${r.client || "Ukjent"} • ${r.totalKm || "-"} km • ${r.startTime || "?"}–${r.endTime || "?"}</div>
+          ${r.incidents ? `<div class="small">Notat: ${r.incidents}</div>` : ""}
+        `;
+
+        container.appendChild(el);
+      });
+    }
+
+    function calcKm() {
+      const s = parseFloat(document.getElementById("odoStart").value);
+      const e = parseFloat(document.getElementById("odoEnd").value);
+      if (!isNaN(s) && !isNaN(e) && e >= s) {
+        document.getElementById("totalKm").value = (e - s);
+      } else {
+        document.getElementById("totalKm").value = "";
+      }
+    }
+
+    function setupChips() {
+      const chips = document.querySelectorAll("#transportTypeChips .chip");
+      const hidden = document.getElementById("transportType");
+
+      chips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+          chips.forEach((c) => c.classList.remove("selected"));
+          chip.classList.add("selected");
+          hidden.value = chip.dataset.value;
+        });
+      });
+    }
+
+    function exportCsv() {
+      const data = loadReports();
+      if (data.length === 0)
+        return alert("Ingen rapporter å eksportere.");
+
+      const headers = [
+        "Dato","Kunde","Starttid","Sluttid","Startsted","Sluttsted",
+        "Følgebil","Transport reg.nr","Type","Km start","Km slutt",
+        "Total km","Kjøretid","Ventetid","Vær","Veg","Hendelser",
+        "Radio","Dekning","Avvik","Sjåfør"
+      ];
+
+      const rows = data.map((r) => [
+        r.date, r.client, r.startTime, r.endTime, r.startLocation,
+        r.endLocation, r.escortReg, r.transportReg, r.transportType,
+        r.odoStart, r.odoEnd, r.totalKm, r.driveTime, r.waitTime,
+        r.weather, r.road, (r.incidents||"").replace(/\n/g," "),
+        r.radioOk, r.coverage, (r.deviations||"").replace(/\n/g," "),
+        r.driverName
+      ]);
+
+      const csv = [headers.join(";"), ...rows.map(x => x.join(";"))].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "kjorerapporter.csv";
+      a.click();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      // Fyll dato
+      const d = new Date().toISOString().split("T")[0];
+      document.getElementById("date").value = d;
+
+      setupChips();
+      renderReports();
+
+      document.getElementById("odoStart").addEventListener("input", calcKm);
+      document.getElementById("odoEnd").addEventListener("input", calcKm);
+
+      document.getElementById("reportForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+
+        const r = {
+          date: date.value,
+          client: client.value,
+          startTime: startTime.value,
+          endTime: endTime.value,
+          startLocation: startLocation.value,
+          endLocation: endLocation.value,
+          escortReg: escortReg.value,
+          transportReg: transportReg.value,
+          transportType: transportType.value,
+          odoStart: odoStart.value,
+          odoEnd: odoEnd.value,
+          totalKm: totalKm.value,
+          driveTime: driveTime.value,
+          waitTime: waitTime.value,
+          weather: weather.value,
+          road: road.value,
+          incidents: incidents.value,
+          radioOk: radioOk.value,
+          coverage: coverage.value,
+          deviations: deviations.value,
+          driverName: driverName.value
+        };
+
+        const list = loadReports();
+        list.push(r);
+        saveReports(list);
+        renderReports();
+        alert("Kjørerapport lagret.");
+      });
+
+      document.getElementById("clearForm").addEventListener("click", () => {
+        reportForm.reset();
+        totalKm.value = "";
+        document.querySelectorAll(".chip").forEach(c => c.classList.remove("selected"));
+      });
+
+      document.getElementById("clearAll").addEventListener("click", () => {
+        if (confirm("Slette alle rapporter?")) {
+          saveReports([]);
+          renderReports();
+        }
+      });
+
+      document.getElementById("exportCsv").addEventListener("click", exportCsv);
+    });
+  </script>
+
+</body>
+</html>
